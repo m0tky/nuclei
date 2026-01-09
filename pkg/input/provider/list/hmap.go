@@ -576,7 +576,7 @@ func (i *ListInputProvider) removeTargets(targets []string) {
 
 		// [Check 2] Exact match on Custom IP
 		if metaInput.CustomIP != "" {
-			if _, ok := ips[metaInput.Input]; ok {
+			if _, ok := ips[metaInput.CustomIP]; ok {
 				keysToDelete = append(keysToDelete, k)
 				return nil
 			}
