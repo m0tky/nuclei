@@ -563,25 +563,39 @@ func (i *ListInputProvider) removeTargets(targets []string) {
 	var keysToDelete [][]byte
 
 	i.hostMap.Scan(func(k, v []byte) error {
-		rawURL := string(k)
+		var metaInput contextargs.MetaInput
+		if err := metaInput.Unmarshal(string(k)); err != nil {
+			return nil
+		}
 
-		if _, ok := ips[rawURL]; ok {
+		// [Check 1] Exact match on the input string (Target URL/IP)
+		if _, ok := ips[metaInput.Input]; ok {
 			keysToDelete = append(keysToDelete, k)
 			return nil
 		}
 
-		parsed, err := urlutil.ParseURL(rawURL, true)
+		// [Check 2] Exact match on Custom IP
+		if metaInput.CustomIP != "" {
+			if _, ok := ips[metaInput.Input]; ok {
+				keysToDelete = append(keysToDelete, k)
+				return nil
+			}
+		}
+
+		parsed, err := urlutil.ParseURL(metaInput.Input, true)
 		if err != nil {
 			return nil
 		}
 
 		hostname := parsed.Hostname()
 
+		// [Check 3] Exact match on the hostname
 		if _, ok := ips[hostname]; ok {
 			keysToDelete = append(keysToDelete, k)
 			return nil
 		}
 
+		// [Check 4] If the hostname or CustomIP falls within any excluded CIDR ranges
 		if len(cidrs) > 0 {
 			if ip := net.ParseIP(hostname); ip != nil {
 				for _, ipnet := range cidrs {
@@ -591,12 +605,26 @@ func (i *ListInputProvider) removeTargets(targets []string) {
 					}
 				}
 			}
-		}
 
+			if metaInput.CustomIP != "" && len(cidrs) > 0 {
+				if ip := net.ParseIP(metaInput.CustomIP); ip != nil {
+					for _, ipnet := range cidrs {
+						if ipnet.Contains(ip) {
+							keysToDelete = append(keysToDelete, k)
+							return nil
+						}
+					}
+				}
+			}
+		}
 		return nil
 	})
 
 	for _, key := range keysToDelete {
-		i.hostMap.Del(string(key))
+		keyStr := string(key)
+		_ = i.hostMap.Del(keyStr)
+		i.excludedHosts[keyStr] = struct{}{}
+		i.excludedCount++
+		i.inputCount--
 	}
 }
