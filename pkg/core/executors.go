@@ -127,20 +127,22 @@ func (e *Engine) executeTemplateWithTargets(ctx context.Context, template *templ
 		default:
 		}
 
+		completed, skipUnder, doAbove, isInFlight := resumeFromInfo.Snapshot(index)
+
 		// Best effort to track the host progression
 		// skips indexes lower than the minimum in-flight at interruption time
 		var skip bool
-		if resumeFromInfo.Completed { // the template was completed
+		if completed { // the template was completed
 			e.options.Logger.Debug().Msgf("[%s] Skipping \"%s\": Resume - Template already completed", template.ID, scannedValue.Input)
 			skip = true
-		} else if index < resumeFromInfo.SkipUnder { // index lower than the sliding window (bulk-size)
+		} else if index < skipUnder { // index lower than the sliding window (bulk-size)
 			e.options.Logger.Debug().Msgf("[%s] Skipping \"%s\": Resume - Target already processed", template.ID, scannedValue.Input)
 			skip = true
-		} else if _, isInFlight := resumeFromInfo.InFlight[index]; isInFlight { // the target wasn't completed successfully
+		} else if isInFlight { // the target wasn't completed successfully
 			e.options.Logger.Debug().Msgf("[%s] Repeating \"%s\": Resume - Target wasn't completed", template.ID, scannedValue.Input)
 			// skip is already false, but leaving it here for clarity
 			skip = false
-		} else if index > resumeFromInfo.DoAbove { // index above the sliding window (bulk-size)
+		} else if index > doAbove { // index above the sliding window (bulk-size)
 			// skip is already false - but leaving it here for clarity
 			skip = false
 		}
