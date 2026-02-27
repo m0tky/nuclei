@@ -36,14 +36,15 @@ type ResumeInfo struct {
 }
 
 // Snapshot returns the current state of the ResumeInfo instance
-func (resumeInfo *ResumeInfo) Snapshot(index uint32) (bool, uint32, uint32, bool) {
+func (resumeInfo *ResumeInfo) Snapshot(index uint32) (completed bool, skipUnder uint32, doAbove uint32, isInFlight bool) {
+ 	resumeInfo.RLock()
 	resumeInfo.RLock()
 	defer resumeInfo.RUnlock()
-	completed := resumeInfo.Completed
-	skipUnder := resumeInfo.SkipUnder
-	doAbove := resumeInfo.DoAbove
-	_, isInFlight := resumeInfo.InFlight[index]
-	return completed, skipUnder, doAbove, isInFlight
+	completed = resumeInfo.Completed
+	skipUnder = resumeInfo.SkipUnder
+	doAbove = resumeInfo.DoAbove
+	_, isInFlight = resumeInfo.InFlight[index]
+	return
 }
 
 // Clone the ResumeInfo structure
