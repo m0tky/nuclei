@@ -201,6 +201,18 @@ func (e *Engine) executeTemplatesOnTarget(ctx context.Context, alltemplates []*t
 		default:
 		}
 
+		// In host-spray mode every template runs against the same target.
+		// Check whether the target has already been marked as permanently
+		// unresponsive by HostErrorsCache before spawning another goroutine.
+		// Without this guard the loop spawns O(templates) goroutines that each
+		// do nothing but write a "skipped — unresponsive" event, which with
+		// JSON output (-j/-je) can serialise thousands of writes and keep the
+		// process running for hours instead of the expected few minutes.
+		if e.executerOpts.HostErrorsCache != nil &&
+			e.executerOpts.HostErrorsCache.Check(e.executerOpts.ProtocolType.String(), contextargs.NewWithMetaInput(ctx, target)) {
+			break
+		}
+
 		// resize check point - nop if there are no changes
 		wp.RefreshWithConfig(e.GetWorkPoolConfig())
 
