@@ -105,9 +105,9 @@ func (r *Runner) listAvailableStoreTags(store *loader.Store) {
 	for _, tag := range tagsList {
 		if r.options.JSONL {
 			marshalled, _ := jsoniter.Marshal(tag)
-			r.Logger.Debug().Msgf("%s", string(marshalled))
+			r.Logger.Print().Msgf("%s", string(marshalled))
 		} else {
-			r.Logger.Debug().Msgf("%s (%d)", tag.Key, tag.Value)
+			r.Logger.Print().Msgf("%s (%d)", tag.Key, tag.Value)
 		}
 	}
 }
