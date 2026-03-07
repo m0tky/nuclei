@@ -201,6 +201,28 @@ func (e *Engine) executeTemplatesOnTarget(ctx context.Context, alltemplates []*t
 		default:
 		}
 
+		// Check whether the target has already been marked as permanently
+		// unresponsive by HostErrorsCache before spawning another goroutine.
+		if e.executerOpts.HostErrorsCache != nil &&
+			e.executerOpts.HostErrorsCache.Check(e.executerOpts.ProtocolType.String(), contextargs.NewWithMetaInput(ctx, target)) {
+			skipEvent := &output.ResultEvent{
+				TemplateID:    tpl.ID,
+				TemplatePath:  tpl.Path,
+				Info:          tpl.Info,
+				Type:          e.executerOpts.ProtocolType.String(),
+				Host:          target.Input,
+				MatcherStatus: false,
+				Error:         "host was skipped as it was found unresponsive",
+				Timestamp:     time.Now(),
+			}
+			if e.Callback != nil {
+				e.Callback(skipEvent)
+			} else if e.executerOpts.Output != nil {
+				_ = e.executerOpts.Output.Write(skipEvent)
+			}
+			break
+		}
+
 		// resize check point - nop if there are no changes
 		wp.RefreshWithConfig(e.GetWorkPoolConfig())
 
