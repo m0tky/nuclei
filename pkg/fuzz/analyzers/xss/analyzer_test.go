@@ -154,6 +154,18 @@ func TestAnalyzeReflectionContext(t *testing.T) {
 			marker:   marker,
 			expected: ContextScript,
 		},
+		{
+			name:     "data:application/xhtml+xml URI in src",
+			body:     `<iframe src="data:application/xhtml+xml,<html xmlns='http://www.w3.org/1999/xhtml'><body>FUZZ1337MARKER</body></html>">`,
+			marker:   marker,
+			expected: ContextScript,
+		},
+		{
+			name:     "reflection in ping attribute",
+			body:     `<a href="/" ping="https://tracker.example.com/FUZZ1337MARKER">click</a>`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
+		},
 
 		// === ScriptData Context (non-executable script) ===
 		{
@@ -307,12 +319,30 @@ func TestAnalyzeReflectionContext(t *testing.T) {
 			expected: ContextHTMLAttributeURL,
 		},
 
-		// === Script with mixed attributes ===
+		// === Script tag attribute reflections ===
+		{
+			name:     "reflection in script src attribute",
+			body:     `<script src="FUZZ1337MARKER"></script>`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
+		},
+		{
+			name:     "reflection in script src with type attribute",
+			body:     `<script type="text/javascript" src="FUZZ1337MARKER"></script>`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
+		},
 		{
 			name:     "script tag with src and type but reflection in text",
 			body:     `<script type="text/javascript" src="app.js">var z = "FUZZ1337MARKER";</script>`,
 			marker:   marker,
 			expected: ContextScript,
+		},
+		{
+			name:     "non-executable script with marker in src attribute",
+			body:     `<script type="application/json" src="FUZZ1337MARKER"></script>`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
 		},
 
 		// === Noscript tag ===

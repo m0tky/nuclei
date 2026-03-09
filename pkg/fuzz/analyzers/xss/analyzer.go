@@ -7,6 +7,7 @@ import (
 )
 
 // URL attributes whose values may contain navigable URIs.
+// ping was missed initially, it fires a POST to the URL when <a> is clicked.
 var urlAttrs = map[string]struct{}{
 	"href":       {},
 	"src":        {},
@@ -19,6 +20,7 @@ var urlAttrs = map[string]struct{}{
 	"background": {},
 	"manifest":   {},
 	"icon":       {},
+	"ping":       {},
 }
 
 // Event handler attributes that execute JavaScript.
@@ -174,20 +176,25 @@ func AnalyzeReflectionContext(responseBody, marker string) (XSSContext, error) {
 			tn, hasAttr := tokenizer.TagName()
 			tagName := strings.ToLower(string(tn))
 
-			if tt == html.StartTagToken {
-				switch tagName {
-				case "script":
-					inScript = true
-					scriptIsExec = isExecutableScript(tokenizer, hasAttr)
-				case "style":
-					inStyle = true
-				}
-			}
-
+			// Important: TagAttr() is a forward-only iterator. If we checked
+			// script type and marker in separate loops, the second loop would
+			// see no attributes (already consumed). So we do both in one pass.
 			if hasAttr {
-				if ctx, found := checkAttributes(tokenizer, markerLower, tagName); found {
+				ctx, found, scriptType := scanAttributes(tokenizer, markerLower, tagName)
+				if found {
 					return ctx, nil
 				}
+				if tt == html.StartTagToken && tagName == "script" {
+					inScript = true
+					scriptIsExec = isScriptTypeExecutable(scriptType)
+				}
+			} else if tt == html.StartTagToken && tagName == "script" {
+				inScript = true
+				scriptIsExec = true // no attrs = executable
+			}
+
+			if tt == html.StartTagToken && tagName == "style" {
+				inStyle = true
 			}
 
 		case html.EndTagToken:
@@ -216,54 +223,55 @@ func AnalyzeReflectionContext(responseBody, marker string) (XSSContext, error) {
 	}
 }
 
-// isExecutableScript checks whether the current <script> tag has a type
-// that browsers will execute. No type attr = executable.
-func isExecutableScript(tokenizer *html.Tokenizer, hasAttr bool) bool {
-	if !hasAttr {
-		return true
-	}
-
+// scanAttributes walks all attributes in one pass. We need this because
+// the tokenizer's TagAttr() is consumable, once you iterate through,
+// the attributes are gone. Earlier version had a bug where checking the
+// script type first would eat all the attrs before we could check for
+// the marker, so <script src="MARKER"> would silently miss the reflection.
+func scanAttributes(tokenizer *html.Tokenizer, markerLower, tagName string) (XSSContext, bool, string) {
+	var markerCtx XSSContext
+	markerFound := false
+	scriptType := ""
 	foundType := false
-	typeValue := ""
 
-	for {
-		key, val, more := tokenizer.TagAttr()
-		if strings.ToLower(string(key)) == "type" {
-			foundType = true
-			typeValue = strings.ToLower(strings.TrimSpace(string(val)))
-		}
-		if !more {
-			break
-		}
-	}
-
-	if !foundType {
-		return true
-	}
-
-	_, isExec := executableScriptTypes[typeValue]
-	return isExec
-}
-
-// checkAttributes walks the attributes of the current tag looking for
-// the marker in any attribute value (or name).
-func checkAttributes(tokenizer *html.Tokenizer, markerLower, tagName string) (XSSContext, bool) {
 	for {
 		key, val, more := tokenizer.TagAttr()
 		attrName := strings.ToLower(string(key))
 		attrValue := string(val)
 
-		if containsMarker(attrValue, markerLower) {
-			return classifyAttributeContext(attrName, attrValue, tagName), true
+		if attrName == "type" {
+			foundType = true
+			scriptType = strings.ToLower(strings.TrimSpace(attrValue))
 		}
-		if containsMarker(attrName, markerLower) {
-			return ContextHTMLAttribute, true
+
+		if !markerFound {
+			if containsMarker(attrValue, markerLower) {
+				markerCtx = classifyAttributeContext(attrName, attrValue, tagName)
+				markerFound = true
+			} else if containsMarker(attrName, markerLower) {
+				markerCtx = ContextHTMLAttribute
+				markerFound = true
+			}
 		}
+
 		if !more {
 			break
 		}
 	}
-	return ContextUnknown, false
+
+	// no type attr means the script is executable by default
+	if !foundType {
+		scriptType = ""
+	}
+
+	return markerCtx, markerFound, scriptType
+}
+
+// isScriptTypeExecutable returns true if the type value is something
+// browsers will actually run (or empty, meaning no type was set).
+func isScriptTypeExecutable(scriptType string) bool {
+	_, isExec := executableScriptTypes[scriptType]
+	return isExec
 }
 
 // classifyAttributeContext maps an attribute name to the right XSS context.
@@ -282,7 +290,12 @@ func classifyAttributeContext(attrName, attrValue, tagName string) XSSContext {
 
 	if _, ok := urlAttrs[attrName]; ok {
 		trimmed := strings.TrimSpace(strings.ToLower(attrValue))
-		if strings.HasPrefix(trimmed, "javascript:") || strings.HasPrefix(trimmed, "data:text/html") {
+		// also catch data:application/xhtml+xml as it renders and executes
+		// script the same way data:text/html does in iframes. Missed this one
+		// on the first pass.
+		if strings.HasPrefix(trimmed, "javascript:") ||
+			strings.HasPrefix(trimmed, "data:text/html") ||
+			strings.HasPrefix(trimmed, "data:application/xhtml+xml") {
 			return ContextScript
 		}
 		return ContextHTMLAttributeURL
