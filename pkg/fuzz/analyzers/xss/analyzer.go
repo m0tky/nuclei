@@ -1,6 +1,7 @@
 package xss
 
 import (
+	"io"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -165,6 +166,10 @@ func AnalyzeReflectionContext(responseBody, marker string) (XSSContext, error) {
 		tt := tokenizer.Next()
 		switch tt {
 		case html.ErrorToken:
+			// EOF is expected (end of doc), but surface real parse errors
+			if err := tokenizer.Err(); err != nil && err != io.EOF {
+				return ContextUnknown, err
+			}
 			return ContextUnknown, nil
 
 		case html.CommentToken:
@@ -232,7 +237,6 @@ func scanAttributes(tokenizer *html.Tokenizer, markerLower, tagName string) (XSS
 	var markerCtx XSSContext
 	markerFound := false
 	scriptType := ""
-	foundType := false
 
 	for {
 		key, val, more := tokenizer.TagAttr()
@@ -240,7 +244,6 @@ func scanAttributes(tokenizer *html.Tokenizer, markerLower, tagName string) (XSS
 		attrValue := string(val)
 
 		if attrName == "type" {
-			foundType = true
 			scriptType = strings.ToLower(strings.TrimSpace(attrValue))
 		}
 
@@ -257,11 +260,6 @@ func scanAttributes(tokenizer *html.Tokenizer, markerLower, tagName string) (XSS
 		if !more {
 			break
 		}
-	}
-
-	// no type attr means the script is executable by default
-	if !foundType {
-		scriptType = ""
 	}
 
 	return markerCtx, markerFound, scriptType
