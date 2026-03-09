@@ -7,7 +7,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// URL attributes whose values may contain navigable URIs.
+// urlAttrs lists attributes whose values may contain navigable URIs.
 // ping was missed initially, it fires a POST to the URL when <a> is clicked.
 var urlAttrs = map[string]struct{}{
 	"href":       {},
@@ -24,7 +24,7 @@ var urlAttrs = map[string]struct{}{
 	"ping":       {},
 }
 
-// Event handler attributes that execute JavaScript.
+// eventHandlers lists attributes that execute JavaScript when triggered.
 var eventHandlers = map[string]struct{}{
 	"onabort":              {},
 	"onafterprint":         {},
@@ -128,7 +128,7 @@ var eventHandlers = map[string]struct{}{
 	"onsecuritypolicyviolation": {},
 }
 
-// Script MIME types that browsers actually execute.
+// executableScriptTypes lists MIME types that browsers actually execute.
 // Empty string covers <script> with no type attribute.
 var executableScriptTypes = map[string]struct{}{
 	"":                          {},

@@ -19,6 +19,7 @@ const (
 	ContextComment                              // HTML comment
 )
 
+// contextNames maps each XSSContext value to its human-readable name.
 var contextNames = map[XSSContext]string{
 	ContextUnknown:            "Unknown",
 	ContextHTMLBody:           "HTMLBody",
