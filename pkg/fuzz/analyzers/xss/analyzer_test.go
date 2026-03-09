@@ -77,6 +77,13 @@ func TestAnalyzeReflectionContext(t *testing.T) {
 			expected: ContextHTMLAttributeURL,
 		},
 
+		{
+			name:     "reflection in longdesc attribute",
+			body:     `<img longdesc="https://example.com/desc/FUZZ1337MARKER">`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
+		},
+
 		// === Event Handler Attribute Context ===
 		{
 			name:     "reflection in onclick handler",
@@ -179,6 +186,36 @@ func TestAnalyzeReflectionContext(t *testing.T) {
 			expected: ContextScript,
 		},
 		{
+			name:     "data:image/svg+xml URI in iframe src",
+			body:     `<iframe src="data:image/svg+xml,<svg onload=alert(FUZZ1337MARKER)>">`,
+			marker:   marker,
+			expected: ContextScript,
+		},
+		{
+			name:     "data:image/svg+xml URI in img src does not execute",
+			body:     `<img src="data:image/svg+xml,<svg>FUZZ1337MARKER</svg>">`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
+		},
+		{
+			name:     "vbscript URI in href",
+			body:     `<a href="vbscript:msgbox(FUZZ1337MARKER)">click</a>`,
+			marker:   marker,
+			expected: ContextScript,
+		},
+		{
+			name:     "javascript URI in img src does not execute",
+			body:     `<img src="javascript:alert('FUZZ1337MARKER')">`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
+		},
+		{
+			name:     "javascript URI in ping does not execute",
+			body:     `<a href="/" ping="javascript:FUZZ1337MARKER">click</a>`,
+			marker:   marker,
+			expected: ContextHTMLAttributeURL,
+		},
+		{
 			name:     "reflection in ping attribute",
 			body:     `<a href="/" ping="https://tracker.example.com/FUZZ1337MARKER">click</a>`,
 			marker:   marker,
@@ -207,6 +244,13 @@ func TestAnalyzeReflectionContext(t *testing.T) {
 		{
 			name:     "reflection in script type=application/ld+json",
 			body:     `<script type="application/ld+json">{"name":"FUZZ1337MARKER"}</script>`,
+			marker:   marker,
+			expected: ContextScriptData,
+		},
+
+		{
+			name:     "duplicate type attributes uses first per HTML5 spec",
+			body:     `<script type="application/json" type="text/javascript">{"key": "FUZZ1337MARKER"}</script>`,
 			marker:   marker,
 			expected: ContextScriptData,
 		},

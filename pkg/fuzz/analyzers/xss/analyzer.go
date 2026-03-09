@@ -22,6 +22,7 @@ var urlAttrs = map[string]struct{}{
 	"manifest":   {},
 	"icon":       {},
 	"ping":       {},
+	"longdesc":   {},
 }
 
 // eventHandlers lists attributes that execute JavaScript when triggered.
@@ -145,6 +146,18 @@ var executableScriptTypes = map[string]struct{}{
 	"application/x-ecmascript":  {},
 }
 
+// executableURLSinks maps URL attribute names to the set of tags where
+// dangerous URIs (javascript:, vbscript:, data:text/html, etc.) actually
+// execute or render a document. Other tag+attr combos stay as
+// ContextHTMLAttributeURL — e.g. <img src="javascript:..."> doesn't execute.
+var executableURLSinks = map[string]map[string]struct{}{
+	"href":       {"a": {}, "area": {}},
+	"src":        {"iframe": {}, "frame": {}, "embed": {}},
+	"action":     {"form": {}},
+	"formaction": {"button": {}, "input": {}},
+	"data":       {"object": {}},
+}
+
 // AnalyzeReflectionContext determines the HTML context where the given marker
 // is reflected in the response body. Uses golang.org/x/net/html tokenizer
 // for parsing. Returns ContextUnknown if the marker is not found.
@@ -243,14 +256,20 @@ func scanAttributes(tokenizer *html.Tokenizer, markerLower, tagName string) (XSS
 	var markerCtx XSSContext
 	markerFound := false
 	scriptType := ""
+	foundType := false
 
 	for {
 		key, val, more := tokenizer.TagAttr()
 		attrName := strings.ToLower(string(key))
 		attrValue := string(val)
 
-		if attrName == "type" {
+		// HTML5 spec: browsers use the first type attribute when dupes exist.
+		// Without this check, <script type="application/json" type="text/javascript">
+		// would be classified as executable (last wins) when the browser treats it
+		// as non-executable (first wins).
+		if attrName == "type" && !foundType {
 			scriptType = strings.ToLower(strings.TrimSpace(attrValue))
+			foundType = true
 		}
 
 		if !markerFound {
@@ -300,13 +319,19 @@ func classifyAttributeContext(attrName, attrValue, tagName string) XSSContext {
 
 	if _, ok := urlAttrs[attrName]; ok {
 		trimmed := strings.TrimSpace(strings.ToLower(attrValue))
-		// also catch data:application/xhtml+xml as it renders and executes
-		// script the same way data:text/html does in iframes. Missed this one
-		// on the first pass.
 		if strings.HasPrefix(trimmed, "javascript:") ||
+			strings.HasPrefix(trimmed, "vbscript:") ||
 			strings.HasPrefix(trimmed, "data:text/html") ||
-			strings.HasPrefix(trimmed, "data:application/xhtml+xml") {
-			return ContextScript
+			strings.HasPrefix(trimmed, "data:application/xhtml+xml") ||
+			strings.HasPrefix(trimmed, "data:image/svg+xml") {
+			// only promote to ContextScript if this tag+attr pair actually
+			// executes dangerous URIs in browsers — <img src="javascript:...">
+			// doesn't execute, <a href="javascript:..."> does
+			if tags, ok := executableURLSinks[attrName]; ok {
+				if _, ok := tags[tagName]; ok {
+					return ContextScript
+				}
+			}
 		}
 		return ContextHTMLAttributeURL
 	}
