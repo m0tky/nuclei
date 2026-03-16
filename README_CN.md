@@ -263,6 +263,7 @@ UNCOVER引擎:
     -sb, -show-brower                    在无界面浏览器运行模板时，显示浏览器
     -ho, -headless-options string[]      使用附加选项启动无界面浏览器
     -sc, -system-chrome                  不使用Nuclei自带的浏览器，使用本地浏览器
+    -cdpe, -cdp-endpoint string          通过Chrome DevTools Protocol (CDP)端点使用远程浏览器
     -lha, -list-headless-action          列出可用的无界面操作
 
 调试：
@@ -319,7 +320,7 @@ UNCOVER引擎:
 
 ```
 
-更多信息请参考文档: https://docs.nuclei.sh/getting-started/running
+更多信息请参考文档: https://docs.projectdiscovery.io/getting-started/running
 
 
 ### 运行Nuclei

@@ -309,6 +309,7 @@ HEADLESS:
    -sb, -show-browser               show the browser on the screen when running templates with headless mode
    -ho, -headless-options string[]  start headless chrome with additional options
    -sc, -system-chrome              use local installed Chrome browser instead of nuclei installed
+   -cdpe, -cdp-endpoint string      use remote browser via Chrome DevTools Protocol (CDP) endpoint
    -lha, -list-headless-action      list available headless actions
 
 DEBUG:
@@ -375,11 +376,11 @@ Run nuclei with a JSON output:
 Run nuclei with sorted Markdown outputs (with environment variables):
 	$ MARKDOWN_EXPORT_SORT_MODE=template nuclei -target example.com -markdown-export nuclei_report/
 
-Additional documentation is available at: https://docs.nuclei.sh/getting-started/running
+Additional documentation is available at: https://docs.projectdiscovery.io/getting-started/running
 
 ```
 
-Additional documentation is available at: [**`docs.nuclei.sh/getting-started/running`**](https://docs.nuclei.sh/getting-started/running?utm_source=github&utm_medium=web&utm_campaign=nuclei_readme)
+Additional documentation is available at: [**`docs.projectdiscovery.io/getting-started/running`**](https://docs.projectdiscovery.io/getting-started/running?utm_source=github&utm_medium=web&utm_campaign=nuclei_readme)
 
 </details>
 

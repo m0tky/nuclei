@@ -196,7 +196,7 @@ func main() {
 
 	// Setup filename for graceful exits
 	resumeFileName := types.DefaultResumeFilePath()
-	if options.Resume == "" {
+	if options.Resume != "" {
 		resumeFileName = options.Resume
 	}
 	c := make(chan os.Signal, 1)
@@ -443,6 +443,7 @@ on extensive configurability, massive extensibility and ease of use.`)
 		flagSet.BoolVarP(&options.ShowBrowser, "show-browser", "sb", false, "show the browser on the screen when running templates with headless mode"),
 		flagSet.StringSliceVarP(&options.HeadlessOptionalArguments, "headless-options", "ho", nil, "start headless chrome with additional options", goflags.FileCommaSeparatedStringSliceOptions),
 		flagSet.BoolVarP(&options.UseInstalledChrome, "system-chrome", "sc", false, "use local installed Chrome browser instead of nuclei installed"),
+		flagSet.StringVarP(&options.CDPEndpoint, "cdp-endpoint", "cdpe", "", "use remote browser via Chrome DevTools Protocol (CDP) endpoint"),
 		flagSet.BoolVarP(&options.ShowActions, "list-headless-action", "lha", false, "list available headless actions"),
 	)
 
@@ -750,12 +751,13 @@ func resetCallback() {
 Using '-reset' will delete all nuclei configurations files and all nuclei-templates
 
 Following files will be deleted:
-1. All Config + Resumes files at %v
-2. All nuclei-templates at %v
+1. All config files at %v
+2. All cache files (including resume state) at %v
+3. All nuclei-templates at %v
 
 Note: Make sure you have backup of your custom nuclei-templates before proceeding
 
-`, config.DefaultConfig.GetConfigDir(), config.DefaultConfig.TemplatesDirectory)
+`, config.DefaultConfig.GetConfigDir(), config.DefaultConfig.GetCacheDir(), config.DefaultConfig.TemplatesDirectory)
 	options.Logger.Print().Msg(warning)
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -776,6 +778,10 @@ Note: Make sure you have backup of your custom nuclei-templates before proceedin
 	err := os.RemoveAll(config.DefaultConfig.GetConfigDir())
 	if err != nil {
 		options.Logger.Fatal().Msgf("could not delete config dir: %s", err)
+	}
+	err = os.RemoveAll(config.DefaultConfig.GetCacheDir())
+	if err != nil {
+		options.Logger.Fatal().Msgf("could not delete cache dir: %s", err)
 	}
 	err = os.RemoveAll(config.DefaultConfig.TemplatesDirectory)
 	if err != nil {

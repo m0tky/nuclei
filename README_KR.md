@@ -233,6 +233,7 @@ HEADLESS:
    -sb, -show-browser               headless 모드로 실행하는 템플릿에서 브라우저 화면 표시
    -ho, -headless-options string[]  추가 옵션으로 headless chrome 시작
    -sc, -system-chrome              nuclei가 설치한 Chrome 대신 로컬에 설치된 Chrome 브라우저 사용
+   -cdpe, -cdp-endpoint string      Chrome DevTools Protocol (CDP) 엔드포인트를 통한 원격 브라우저 사용
    -lha, -list-headless-action      사용 가능한 headless 액션 목록 표시
 
 DEBUG:
@@ -288,7 +289,7 @@ JSON 출력으로 nuclei 실행:
 정렬된 Markdown 출력으로 nuclei 실행 (환경 변수 사용):
 	$ MARKDOWN_EXPORT_SORT_MODE=template nuclei -target example.com -markdown-export nuclei_report/
 
-추가 문서는 여기에서 확인할 수 있습니다: https://docs.nuclei.sh/getting-started/running
+추가 문서는 여기에서 확인할 수 있습니다: https://docs.projectdiscovery.io/getting-started/running
 ```
 
 ### Nuclei 실행
