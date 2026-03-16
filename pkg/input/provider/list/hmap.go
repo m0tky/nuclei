@@ -338,16 +338,20 @@ func (i *ListInputProvider) initializeInputSources(opts *Options) error {
 		for _, target := range options.ExcludeTargets {
 			switch {
 			case iputil.IsCIDR(target):
-				ips := expand.CIDR(target)
-				i.removeTargets(ips)
+				i.removeTargets([]string{target})
 			case asn.IsASN(target):
-				ips := expand.ASN(target)
-				i.removeTargets(ips)
+				cidrs, _ := asn.GetCIDRsForASNNum(target)
+				cidrStrs := make([]string, 0, len(cidrs))
+				for _, cidr := range cidrs {
+					cidrStrs = append(cidrStrs, cidr.String())
+				}
+				i.removeTargets(cidrStrs)
 			default:
 				i.Del(options.ExecutionId, target)
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -500,37 +504,57 @@ func (i *ListInputProvider) setItem(metaInput *contextargs.MetaInput) {
 	}
 }
 
-// setItem in the kv store
-func (i *ListInputProvider) delItem(metaInput *contextargs.MetaInput) {
-	targetUrl, err := urlutil.ParseURL(metaInput.Input, true)
-	if err != nil {
-		gologger.Warning().Msgf("%s\n", err)
+const removeTargetsChunkSize = 5000
+
+// delItem removes all hostMap entries matching any of the given targets in a single scan.
+func (i *ListInputProvider) delItem(targets ...*contextargs.MetaInput) {
+	type parsedTarget struct {
+		host  string
+		regex *regexp.Regexp
+	}
+
+	var parsed []parsedTarget
+	for _, mi := range targets {
+		targetUrl, err := urlutil.ParseURL(mi.Input, true)
+		if err != nil {
+			continue
+		}
+		re, _ := regexp.Compile(mi.Input)
+		parsed = append(parsed, parsedTarget{host: targetUrl.Host, regex: re})
+	}
+	if len(parsed) == 0 {
 		return
 	}
 
+	var keysToDelete []string
 	i.hostMap.Scan(func(k, _ []byte) error {
 		var tmpMetaInput contextargs.MetaInput
 		if err := tmpMetaInput.Unmarshal(string(k)); err != nil {
-			return err
+			return nil
 		}
 		tmpKey, err := tmpMetaInput.MarshalString()
 		if err != nil {
-			return err
+			return nil
 		}
 		tmpUrl, err := urlutil.ParseURL(tmpMetaInput.Input, true)
 		if err != nil {
-			return err
+			return nil
 		}
-
-		matched, _ := regexp.MatchString(metaInput.Input, tmpUrl.Host)
-		if tmpUrl.Host == targetUrl.Host || matched {
-			_ = i.hostMap.Del(tmpKey)
-			i.excludedHosts[tmpKey] = struct{}{}
-			i.excludedCount++
-			i.inputCount--
+		for _, pt := range parsed {
+			if tmpUrl.Host == pt.host || (pt.regex != nil && pt.regex.MatchString(tmpUrl.Host)) {
+				keysToDelete = append(keysToDelete, tmpKey)
+				break
+			}
 		}
 		return nil
 	})
+
+	for _, key := range keysToDelete {
+		_ = i.hostMap.Del(key)
+		i.excludedHosts[key] = struct{}{}
+		i.excludedCount++
+		i.inputCount--
+	}
 }
 
 // setHostMapStream sets item in stream mode
@@ -548,83 +572,72 @@ func (i *ListInputProvider) addTargets(executionId string, targets []string) {
 }
 
 func (i *ListInputProvider) removeTargets(targets []string) {
-	ips := make(map[string]struct{})
 	var cidrs []*net.IPNet
+	var otherTargets []string
 
 	for _, t := range targets {
-		_, ipnet, err := net.ParseCIDR(t)
-		if err == nil {
+		if _, ipnet, err := net.ParseCIDR(t); err == nil {
 			cidrs = append(cidrs, ipnet)
 		} else {
-			ips[t] = struct{}{}
+			otherTargets = append(otherTargets, t)
 		}
 	}
 
-	var keysToDelete [][]byte
-
-	i.hostMap.Scan(func(k, v []byte) error {
-		var metaInput contextargs.MetaInput
-		if err := metaInput.Unmarshal(string(k)); err != nil {
-			return nil
-		}
-
-		// [Check 1] Exact match on the input string (Target URL/IP)
-		if _, ok := ips[metaInput.Input]; ok {
-			keysToDelete = append(keysToDelete, k)
-			return nil
-		}
-
-		// [Check 2] Exact match on Custom IP
-		if metaInput.CustomIP != "" {
-			if _, ok := ips[metaInput.CustomIP]; ok {
-				keysToDelete = append(keysToDelete, k)
+	// CIDR targets: single scan with containment check
+	if len(cidrs) > 0 {
+		var keysToDelete []string
+		i.hostMap.Scan(func(k, _ []byte) error {
+			var mi contextargs.MetaInput
+			if err := mi.Unmarshal(string(k)); err != nil {
 				return nil
 			}
-		}
-
-		parsed, err := urlutil.ParseURL(metaInput.Input, true)
-		if err != nil {
-			return nil
-		}
-
-		hostname := parsed.Hostname()
-
-		// [Check 3] Exact match on the hostname
-		if _, ok := ips[hostname]; ok {
-			keysToDelete = append(keysToDelete, k)
-			return nil
-		}
-
-		// [Check 4] If the hostname or CustomIP falls within any excluded CIDR ranges
-		if len(cidrs) > 0 {
-			if ip := net.ParseIP(hostname); ip != nil {
-				for _, ipnet := range cidrs {
-					if ipnet.Contains(ip) {
-						keysToDelete = append(keysToDelete, k)
-						return nil
-					}
-				}
+			key, err := mi.MarshalString()
+			if err != nil {
+				return nil
 			}
-
-			if metaInput.CustomIP != "" {
-				if ip := net.ParseIP(metaInput.CustomIP); ip != nil {
-					for _, ipnet := range cidrs {
-						if ipnet.Contains(ip) {
-							keysToDelete = append(keysToDelete, k)
-							return nil
-						}
-					}
-				}
+			parsed, err := urlutil.ParseURL(mi.Input, true)
+			if err != nil {
+				return nil
 			}
+			if matchesCIDR(parsed.Hostname(), cidrs) || (mi.CustomIP != "" && matchesCIDR(mi.CustomIP, cidrs)) {
+				keysToDelete = append(keysToDelete, key)
+			}
+			return nil
+		})
+		for _, key := range keysToDelete {
+			_ = i.hostMap.Del(key)
+			i.excludedHosts[key] = struct{}{}
+			i.excludedCount++
+			i.inputCount--
 		}
-		return nil
-	})
-
-	for _, key := range keysToDelete {
-		keyStr := string(key)
-		_ = i.hostMap.Del(keyStr)
-		i.excludedHosts[keyStr] = struct{}{}
-		i.excludedCount++
-		i.inputCount--
 	}
+
+	// other targets: chunked delItem with existing hostname+regex matching
+	for start := 0; start < len(otherTargets); start += removeTargetsChunkSize {
+		end := start + removeTargetsChunkSize
+		if end > len(otherTargets) {
+			end = len(otherTargets)
+		}
+		chunk := otherTargets[start:end]
+		metaInputs := make([]*contextargs.MetaInput, 0, len(chunk))
+		for _, target := range chunk {
+			mi := contextargs.NewMetaInput()
+			mi.Input = target
+			metaInputs = append(metaInputs, mi)
+		}
+		i.delItem(metaInputs...)
+	}
+}
+
+func matchesCIDR(host string, cidrs []*net.IPNet) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	for _, ipnet := range cidrs {
+		if ipnet.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
