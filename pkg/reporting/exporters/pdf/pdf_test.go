@@ -93,14 +93,19 @@ func TestExport_Concurrency(t *testing.T) {
 
 	const workers = 50
 	var wg sync.WaitGroup
+	errs := make(chan error, workers)
 	wg.Add(workers)
 	for i := 0; i < workers; i++ {
 		go func() {
 			defer wg.Done()
-			require.NoError(t, exp.Export(makeEvent(severity.Medium)))
+			errs <- exp.Export(makeEvent(severity.Medium))
 		}()
 	}
 	wg.Wait()
+	close(errs)
+	for e := range errs {
+		require.NoError(t, e)
+	}
 	require.Len(t, exp.results, workers)
 }
 

@@ -60,6 +60,13 @@ func (e *Exporter) Export(event *output.ResultEvent) error {
 	if e.options.OmitRaw {
 		row.Request = ""
 		row.Response = ""
+	} else {
+		if len(row.Request) > maxRawLen {
+			row.Request = row.Request[:maxRawLen] + "\n[truncated]"
+		}
+		if len(row.Response) > maxRawLen {
+			row.Response = row.Response[:maxRawLen] + "\n[truncated]"
+		}
 	}
 	e.results = append(e.results, row)
 	return nil
@@ -208,9 +215,6 @@ func renderFindings(doc *fpdf.Fpdf, results []output.ResultEvent) {
 }
 
 func renderCodeBlock(doc *fpdf.Fpdf, label, content string) {
-	if len(content) > maxRawLen {
-		content = content[:maxRawLen] + "\n[truncated]"
-	}
 	doc.SetFont("Helvetica", "B", 8)
 	doc.SetTextColor(60, 60, 60)
 	doc.CellFormat(0, 5, label+":", "0", 1, "", false, 0, "")
