@@ -60,14 +60,17 @@ func (d *Detector) RecordMatch(host, templateID string) bool {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
-	// Even if already flagged, keep tracking distinct template IDs so internal state stays consistent.
+	if state.flagged {
+		return false
+	}
 	if _, ok := state.templateIDs[templateID]; ok {
 		return false
 	}
 
 	state.templateIDs[templateID] = struct{}{}
-	if !state.flagged && len(state.templateIDs) >= d.threshold {
+	if len(state.templateIDs) >= d.threshold {
 		state.flagged = true
+		state.templateIDs = nil
 		return true
 	}
 	return false
@@ -129,9 +132,8 @@ func normalizeHostKey(input string) string {
 	// Strip trailing slashes early.
 	s = strings.TrimRight(s, "/")
 
-	// Strip http/https schemes if present.
-	// If a scheme is present, parse to reliably extract host and optional port.
-	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+	// If an absolute URL is present, parse it to reliably extract host and optional port.
+	if strings.Contains(s, "://") {
 		u, err := url.Parse(s)
 		if err == nil && u != nil {
 			host := u.Hostname()
