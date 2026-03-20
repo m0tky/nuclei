@@ -4,8 +4,77 @@ import (
 	"io"
 	"strings"
 
+	"github.com/projectdiscovery/nuclei/v3/pkg/fuzz/analyzers"
 	"golang.org/x/net/html"
 )
+
+const (
+	analyzerName         = "xss_context"
+	maxResponseBodyBytes = 10 * 1024 * 1024 // 10 MiB
+)
+
+// XSSAnalyzer implements the analyzers.Analyzer interface for XSS context detection.
+type XSSAnalyzer struct{}
+
+var _ analyzers.Analyzer = &XSSAnalyzer{}
+
+func init() {
+	analyzers.RegisterAnalyzer(analyzerName, &XSSAnalyzer{})
+}
+
+func (a *XSSAnalyzer) Name() string {
+	return analyzerName
+}
+
+func (a *XSSAnalyzer) ApplyInitialTransformation(data string, params map[string]interface{}) string {
+	return analyzers.ApplyPayloadTransformations(data)
+}
+
+func (a *XSSAnalyzer) Analyze(options *analyzers.Options) (bool, string, error) {
+	if options == nil || options.FuzzGenerated.Component == nil || options.HttpClient == nil {
+		return false, "", nil
+	}
+
+	gr := options.FuzzGenerated
+	payload := gr.Value
+	if payload == "" {
+		return false, "", nil
+	}
+
+	if err := gr.Component.SetValue(gr.Key, payload); err != nil {
+		return false, "", err
+	}
+	defer func() {
+		_ = gr.Component.SetValue(gr.Key, gr.OriginalValue)
+	}()
+
+	rebuilt, err := gr.Component.Rebuild()
+	if err != nil {
+		return false, "", err
+	}
+
+	resp, err := options.HttpClient.Do(rebuilt)
+	if err != nil {
+		return false, "", err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes))
+	if err != nil {
+		return false, "", err
+	}
+
+	ctx, err := AnalyzeReflectionContext(string(body), payload)
+	if err != nil {
+		return false, "", err
+	}
+	if ctx == ContextUnknown {
+		return false, "", nil
+	}
+	return true, "xss-reflected in " + ctx.String(), nil
+}
 
 // urlAttrs lists attributes whose values may contain navigable URIs.
 // ping was missed initially, it fires a POST to the URL when <a> is clicked.
