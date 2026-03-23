@@ -59,12 +59,11 @@ func TestHeadlessOptionInitialization(t *testing.T) {
 }
 
 func TestThreadSafeNucleiEngineWithNoHostErrors(t *testing.T) {
-	tempTemplate, err := os.CreateTemp(t.TempDir(), "thread-safe-no-host-errors.*.yaml")
+	tmpDir, err := os.MkdirTemp("", "nuclei-test-no-host-errors-*")
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		_ = os.Remove(tempTemplate.Name())
-	})
+	tempTemplate, err := os.CreateTemp(tmpDir, "thread-safe-no-host-errors.*.yaml")
+	require.NoError(t, err)
 
 	_, err = tempTemplate.WriteString(`id: thread-safe-no-host-errors
 info:
@@ -91,21 +90,16 @@ http:
 	options.Templates = append(options.Templates, tempTemplate.Name())
 
 	ne, err := nuclei.NewThreadSafeNucleiEngineCtx(context.TODO(), nuclei.WithOptions(options))
-	if err != nil {
-		require.NoError(t, err, "could not create nuclei engine")
-	}
+	require.NoError(t, err, "could not create nuclei engine")
 
-	defer ne.Close()
+	defer func() {
+		ne.Close()
+		os.RemoveAll(tmpDir)
+	}()
 
-	if err := ne.GlobalLoadAllTemplates(); err != nil {
-		require.NoError(t, err, "could not load templates")
-	}
+	err = ne.GlobalLoadAllTemplates()
+	require.NoError(t, err, "could not load templates")
 
-	// ne.GlobalResultCallback(func(event *output.ResultEvent) {
-	// 	fmt.Println(event.Host, event.Info.SeverityHolder.Severity)
-	// })
-
-	if err := ne.ExecuteNucleiWithOptsCtx(context.TODO(), []string{"scanme.sh"}); err != nil {
-		require.NoError(t, err, "nuclei execution should not return an error")
-	}
+	err = ne.ExecuteNucleiWithOptsCtx(context.TODO(), []string{"scanme.sh"})
+	require.NoError(t, err, "nuclei execution should not return an error")
 }
