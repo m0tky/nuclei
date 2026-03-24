@@ -221,7 +221,9 @@ func wrappedGet(options *types.Options, configuration *Configuration) (*retryabl
 		default:
 			redirectFlow = FollowAllRedirect
 		}
-		maxRedirects = options.MaxRedirects
+		if options.MaxRedirects > 0 {
+			maxRedirects = options.MaxRedirects
+		}
 	}
 	if options.DisableRedirects {
 		options.FollowRedirects = false
