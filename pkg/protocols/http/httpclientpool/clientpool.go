@@ -28,19 +28,6 @@ import (
 	urlutil "github.com/projectdiscovery/utils/url"
 )
 
-var (
-	forceMaxRedirects int
-)
-
-// Init initializes the clientpool implementation
-func Init(options *types.Options) error {
-	if options.ShouldFollowHTTPRedirects() {
-		forceMaxRedirects = options.MaxRedirects
-	}
-
-	return nil
-}
-
 // ConnectionConfiguration contains the custom configuration options for a connection
 type ConnectionConfiguration struct {
 	// DisableKeepAlive of the connection
@@ -221,7 +208,7 @@ func wrappedGet(options *types.Options, configuration *Configuration) (*retryabl
 	redirectFlow := configuration.RedirectFlow
 	maxRedirects := configuration.MaxRedirects
 
-	if forceMaxRedirects > 0 {
+	if options.ShouldFollowHTTPRedirects() {
 		// by default we enable general redirects following
 		switch {
 		case options.FollowHostRedirects:
@@ -229,7 +216,9 @@ func wrappedGet(options *types.Options, configuration *Configuration) (*retryabl
 		default:
 			redirectFlow = FollowAllRedirect
 		}
-		maxRedirects = forceMaxRedirects
+		if options.MaxRedirects > 0 {
+			maxRedirects = options.MaxRedirects
+		}
 	}
 	if options.DisableRedirects {
 		options.FollowRedirects = false
