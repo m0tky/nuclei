@@ -191,15 +191,15 @@ func newThreeStepServer() *httptest.Server {
 	router := httprouter.New()
 	router.GET("/step1", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "step1-ok")
+		_, _ = fmt.Fprint(w, "step1-ok")
 	})
 	router.GET("/step2", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "step2-ok token=abc123secret")
+		_, _ = fmt.Fprint(w, "step2-ok token=abc123secret")
 	})
 	router.GET("/step3", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "step3-ok")
+		_, _ = fmt.Fprint(w, "step3-ok")
 	})
 	return httptest.NewServer(router)
 }
@@ -208,19 +208,19 @@ func newThreeStepServerWithPayloads() *httptest.Server {
 	router := httprouter.New()
 	router.GET("/step1", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "step1-ok")
+		_, _ = fmt.Fprint(w, "step1-ok")
 	})
 	router.POST("/login", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		w.Header().Set("X-Auth-Token", "tok3nvalue99")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "login-ok")
+		_, _ = fmt.Fprint(w, "login-ok")
 	})
 	router.GET("/admin", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		w.WriteHeader(http.StatusOK)
 		if r.URL.Query().Get("token") == "tok3nvalue99" {
-			fmt.Fprint(w, "admin-ok")
+			_, _ = fmt.Fprint(w, "admin-ok")
 		} else {
-			fmt.Fprint(w, "admin-unauthorized")
+			_, _ = fmt.Fprint(w, "admin-unauthorized")
 		}
 	})
 	return httptest.NewServer(router)
@@ -269,13 +269,13 @@ func TestFlowRequestCondition(t *testing.T) {
 func newMultiPayloadServer() *httptest.Server {
 	router := httprouter.New()
 	router.GET("/step1", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		fmt.Fprint(w, "step1-ok")
+		_, _ = fmt.Fprint(w, "step1-ok")
 	})
 	router.POST("/login", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		fmt.Fprint(w, "login-ok")
+		_, _ = fmt.Fprint(w, "login-ok")
 	})
 	router.GET("/data", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		fmt.Fprint(w, "data-ok")
+		_, _ = fmt.Fprint(w, "data-ok")
 	})
 	return httptest.NewServer(router)
 }
