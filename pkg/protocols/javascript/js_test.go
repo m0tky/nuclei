@@ -15,7 +15,7 @@ import (
 	"github.com/projectdiscovery/nuclei/v3/pkg/protocols/common/contextargs"
 	javascript "github.com/projectdiscovery/nuclei/v3/pkg/protocols/javascript"
 	"github.com/projectdiscovery/nuclei/v3/pkg/templates"
-	"github.com/projectdiscovery/nuclei/v3/pkg/testutils"
+	"github.com/projectdiscovery/nuclei/v3/internal/tests/testutils"
 	"github.com/projectdiscovery/ratelimit"
 	"github.com/stretchr/testify/require"
 )
