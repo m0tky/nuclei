@@ -2,13 +2,12 @@ package contextargs
 
 import (
 	"context"
-	"net"
 	"net/http/cookiejar"
-	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/projectdiscovery/gologger"
+	"github.com/projectdiscovery/nuclei/v3/pkg/protocols/common/portutil"
 	mapsutil "github.com/projectdiscovery/utils/maps"
 	sliceutil "github.com/projectdiscovery/utils/slice"
 	stringsutil "github.com/projectdiscovery/utils/strings"
@@ -194,12 +193,8 @@ func resolvePortList(ports []string) []string {
 		if p == "" {
 			continue
 		}
-		if _, err := strconv.Atoi(p); err == nil {
-			resolved = append(resolved, p)
-			continue
-		}
-		if portInt, err := net.LookupPort("tcp", p); err == nil {
-			resolved = append(resolved, strconv.Itoa(portInt))
+		if r, err := portutil.ResolvePort(p); err == nil {
+			resolved = append(resolved, r)
 		}
 	}
 	return resolved

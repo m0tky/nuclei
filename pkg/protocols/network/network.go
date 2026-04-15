@@ -1,8 +1,6 @@
 package network
 
 import (
-	"net"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -12,6 +10,7 @@ import (
 	"github.com/projectdiscovery/nuclei/v3/pkg/protocols"
 	"github.com/projectdiscovery/nuclei/v3/pkg/protocols/common/expressions"
 	"github.com/projectdiscovery/nuclei/v3/pkg/protocols/common/generators"
+	"github.com/projectdiscovery/nuclei/v3/pkg/protocols/common/portutil"
 	"github.com/projectdiscovery/nuclei/v3/pkg/protocols/network/networkclientpool"
 	"github.com/projectdiscovery/utils/errkit"
 	fileutil "github.com/projectdiscovery/utils/file"
@@ -200,15 +199,20 @@ func (request *Request) Compile(options *protocols.ExecutorOptions) error {
 
 	// parse ports and validate
 	if request.Port != "" {
+		seen := make(map[string]struct{})
 		for _, port := range strings.Split(request.Port, ",") {
 			port = strings.TrimSpace(port)
 			if port == "" {
 				continue
 			}
-			resolved, err := resolvePort(port)
+			resolved, err := portutil.ResolvePort(port)
 			if err != nil {
 				return errkit.Wrapf(err, "could not resolve port '%s'", port)
 			}
+			if _, ok := seen[resolved]; ok {
+				continue
+			}
+			seen[resolved] = struct{}{}
 			request.ports = append(request.ports, resolved)
 		}
 	}
@@ -279,20 +283,3 @@ func (r *Request) UpdateOptions(opts *protocols.ExecutorOptions) {
 	r.options.ApplyNewEngineOptions(opts)
 }
 
-// resolvePort converts a port string (numeric or service name) to a validated numeric port string.
-func resolvePort(port string) (string, error) {
-	if port == "" {
-		return "", errkit.New("empty port")
-	}
-	if portInt, err := strconv.Atoi(port); err == nil {
-		if portInt < 1 || portInt > 65535 {
-			return "", errkit.Newf("port %d is not in valid range", portInt)
-		}
-		return port, nil
-	}
-	portInt, err := net.LookupPort("tcp", port)
-	if err != nil {
-		return "", errkit.Newf("unknown service name '%s'", port)
-	}
-	return strconv.Itoa(portInt), nil
-}
